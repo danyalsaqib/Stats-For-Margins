@@ -28,8 +28,10 @@ for i in range(3):
     lol3 = [lol, lol, lol2]
     pose_arr.append(lol3)
 #print(pose_arr)
+
 #size_arr = [30]
-#pose_arr = [[60, 60, 40]]
+#pose_arr = [[50, 50, 30]]
+
 express_scores = []
 hum_scores = []
 ptv_scores = []
@@ -54,6 +56,9 @@ if __name__ == '__main__':
                 rec_TP = 0
                 rec_FP = 0
                 rec_FN = 0
+
+                small_faces = 0
+                invalid_poses = 0
                 for filename in os.listdir(preds):
                     with open(os.path.join(preds, filename)) as f:
                         pred_data = json.load(f)
@@ -82,6 +87,8 @@ if __name__ == '__main__':
                     local_rec_FP = 0
                     local_rec_FN = 0
                     rejecc = 0
+
+                    lmao = 0
                     
                     for i in range(len(pred_data['Bbox'])):
                         validated = 0
@@ -106,6 +113,11 @@ if __name__ == '__main__':
                             size_val = calcSize(base_size, given_size)
                             pose_val = calcPose(base_pose, given_pose)
 
+                            if size_val == 0:
+                                small_faces += 1
+                            elif pose_val == 0:
+                                invalid_poses += 1
+
 
                             if pred_label != 'small face' and pred_label != 'Invalid Pose' and size_val == 1 and pose_val == 1:
                                 #print("Successful File: ", filename)
@@ -123,9 +135,10 @@ if __name__ == '__main__':
                                             else:
                                                 #print("Unknowns exceeded")
                                                 #print("FP - frame: ", pred_label)
-                                                rec_FP += 1
-                                                local_rec_FP += 1
+                                                #rec_FP += 1
+                                                #local_rec_FP += 1
                                                 rec_val = 0
+                                                local_rec_FN += 1
                                             #    rec_FP += 1
                                                 break
 
@@ -138,24 +151,29 @@ if __name__ == '__main__':
                                     rec_local_tp += 1
                                     rec_TP += 1
                                 #else:
-                                #    rec_FP += 1
-                                #    local_rec_FP += 1
+                                    #print("Increasing FP")
+                                    #rec_FP += 1
+                                    #local_rec_FP += 1
                             else:
                                 rejecc += 1
                     
-                    #print("Unk_Count: ", unk_counter)
+                    print("Unk_Count: ", unk_counter)
                     len_percieved_anot = 0
+                    rec_FN = rec_FN + local_rec_FN
                     #print("Rejecc: ", rejecc)
 
                     for anot_counter_label in anot_data['Label']:
                         if anot_counter_label != 'small face' and anot_counter_label != 'Invalid Pose':
                             len_percieved_anot += 1
-                    #print("Length Perceived: ", len_percieved_anot)
+
                     len_percieved_anot = len_percieved_anot - rejecc
-                    rec_FN = rec_FN + len_percieved_anot - rec_local_tp
-                    local_rec_FN = len_percieved_anot - rec_local_tp
-                    if local_rec_FP > 0:
-                        rec_FP = rec_FP - local_rec_FN
+                    print("Length Perceived: ", len_percieved_anot)
+                    local_rec_FP = len_percieved_anot - rec_local_tp - local_rec_FN
+                    rec_FP = rec_FP + local_rec_FP
+                    #rec_FN = rec_FN + len_percieved_anot - rec_local_tp - local_rec_FP # last substraction added
+                    #local_rec_FN = len_percieved_anot - rec_local_tp
+                    #if local_rec_FP > 0:
+                    #    rec_FP = rec_FP - local_rec_FN
 
                                     
                     #print("Pred Boxes Length", len(pred_data['Bbox']))
@@ -173,7 +191,8 @@ if __name__ == '__main__':
 
                     det_FP = det_FP + len(pred_data['Bbox']) - det_local_tp
                     det_FN = det_FN + len(anot_data['Bbox']) - det_local_tp
-                
+
+                """
                 print("\nDetection")
                 print("True Positives: ", det_TP)
                 print("False Positives: ", det_FP)
@@ -186,6 +205,7 @@ if __name__ == '__main__':
                 print("Precision: ", det_precision)
                 print("Recall: ", det_recall)
                 print("F1 Score: ", det_f1s)
+                """
 
                 print("\nRecognition")
                 print("True Positives: ", rec_TP)
@@ -217,11 +237,14 @@ if __name__ == '__main__':
                 elif channel_name == 'samaa':
                     samaa_scores.append(append_wala)
 
+                print("Small Faces: ", small_faces)
+                print("Invalid Poses: ", invalid_poses)
+
                 
-                det_dict = {"True Positives" : det_TP, "False Positives" : det_FP, "False Negatives" : det_FN, "Precision" : det_precision, "Recall" : det_recall, "F1 Score" : det_f1s}
+                #det_dict = {"True Positives" : det_TP, "False Positives" : det_FP, "False Negatives" : det_FN, "Precision" : det_precision, "Recall" : det_recall, "F1 Score" : det_f1s}
                 rec_dict = {"True Positives" : rec_TP, "False Positives" : rec_FP, "False Negatives" : rec_FN, "Precision" : rec_precision, "Recall" : rec_recall, "F1 Score" : rec_f1s}
                 
-                dict = {"Channel" : channel_name, "Size" : int(base_size), "Pose" : base_pose, "Detection Metrics" : det_dict, "Recognition Metrics" : rec_dict}
+                dict = {"Channel" : channel_name, "Size" : int(base_size), "Pose" : base_pose, "Small Faces" : small_faces, "Invalid Poses" : invalid_poses, "Recognition Metrics" : rec_dict}
                 #print(dict)
 
                 saver_string = channel_name + ".txt"
@@ -244,8 +267,8 @@ if __name__ == '__main__':
             with open("problem_frames.txt", 'w') as f:
                 f.write(str(defaulted_frames))
 
+    #express_scores = [[12, 34], [45, 67], [98, 75]]
     print("Express Scores: ", express_scores)
-    express_scores = [[12, 34], [45, 67], [98, 75]]
     plot_stat(express_scores, 'express')
 
 

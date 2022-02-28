@@ -29,7 +29,7 @@ def plot_stat(arr, save_string):
         plt.scatter(x, y, label=str(i))
         plt.legend()
     plt.savefig(save_string)
-    plt.show()
+    #plt.show()
 
 def calcPose(base, given):
     b_roll, b_pitch, b_yaw = base
