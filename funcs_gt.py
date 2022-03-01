@@ -8,75 +8,34 @@ from lxml import etree
 from tqdm import tqdm
 from io import StringIO
 
+
 import numpy as np
-import ast
 from math import *
 import time
-
+#from insight_utils import *
 import os
 import json
 import re
 from numpy import array
-import matplotlib.pyplot as plt
+#app = FaceAnalysis(providers=['CUDAExecutionProvider', 'CPUExecutionProvider'], allowed_modules=['detection'])
+#app.prepare(ctx_id=0, det_size=(640, 640))
 
-def plot_stat(arr, arr_2, save_string, size=1, acc =1):
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    
-    #ax.xlabel('Precision')
-    #ax.ylabel('Recall')
-    if size == 1:
-        if acc == 1:
-            ax.set_title(save_string + "_sizes_acc")
-            ax.set_xlabel("Size Limits")
-            ax.set_ylabel("Recognition Accuracy")
-            lower_lim = np.amin(arr_2) - 0.2
-            ax.set_ylim([lower_lim, 100])
-            ax.stem(arr, arr_2)
-            #ax.legend(loc='upper center', bbox_to_anchor=(0.5,-0.05), ncol = 20)
-            fig.savefig(save_string + "_sizes_acc")
-        else:
-            ax.set_title(save_string + "_sizes_count")
-            ax.set_xlabel("Size Limits")
-            ax.set_ylabel("Number of Small Faces (%)")
-            ax.stem(arr, arr_2)
-            fig.savefig(save_string + "_sizes_count")
-    else:
-        if acc == 1:
-            ax.set_title(save_string + "_poses_acc")
-            ax.set_xlabel("Pose Limits (Pitch)")
-            ax.set_ylabel("Recognition Accuracy")
-            lower_lim = np.amin(arr_2) - 0.2
-            ax.set_ylim([lower_lim, 100])
-            ax.stem(arr, arr_2)
-            fig.savefig(save_string + "_poses_acc")
-        else:
-            ax.set_title(save_string + "_poses_count")
-            ax.set_xlabel("Pose Limits")
-            ax.set_ylabel("Number of Invalid Poses (%)")
-            ax.stem(arr, arr_2)
-            fig.savefig(save_string + "_poses_count")
-            
-    #plt.show()
+#rec_model_path = "./insightface/models/buffalo_l/w600k_r50.onnx"
+#handler = insightface.model_zoo.get_model(rec_model_path)
+#handler.prepare(ctx_id=0)
 
-def calcPose(base, given):
-    if len(given) != 3:
-        return 0
-    b_roll, b_pitch, b_yaw = base
-    g_roll, g_pitch, g_yaw = given
-    val = 0
-    if g_roll <= b_roll and g_pitch <= b_pitch and g_yaw <= b_yaw:
-        val = 1
-    return val
-
-def calcSize(base, given):
-    g_w, g_h = given
-    val = 0
-    if g_w >= base and g_h >= base:
-        val = 1
-    return val
-
-
+def list_anno_file(cvat_xml):
+    root = etree.parse(cvat_xml).getroot()
+    anno = []
+    image_name_attr = ".//image"
+    annot_image_list = []
+    for image_tag in root.iterfind(image_name_attr):
+        hmm = image_tag.items()
+        lol = hmm[1][1]
+        annot_image_list.append(lol)
+        #print("Image Tag: ", lol1)
+    #print("List of Annotated Images", annot_image_list)
+    return annot_image_list
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -152,15 +111,15 @@ def parse_anno_file(cvat_xml, image_name):
     #print("Parsed XML File", anno)
     return anno
 
-def genrate_final_annotation(ground_truth , xml_file, images):
+def genrate_final_annotation(ground_truth, xml_file):
     tot_count = 0
     counting_fails = 0
     for filename in os.listdir(ground_truth):
         tot_count += 1
         final=[]
         labels_final =[]
-        txt_to_json(ground_truth, filename)
-        with open(os.path.join(ground_truth ,filename[:-3]+"json")) as f:
+        #txt_to_json(ground_truth, filename)
+        with open(os.path.join(ground_truth ,filename)) as f:
             #print("Channel: ", ground_truth)
             #print("Filename: ", filename)
             data1 = json.load(f)
@@ -168,8 +127,9 @@ def genrate_final_annotation(ground_truth , xml_file, images):
             bbox = data1["Bbox"]
             labelss = data1["Label"]
             found = 0
-            for filename1 in os.listdir(images):
-                if (filename[:-3]==filename1[:-3]):
+            annot_image_list = list_anno_file(xml_file)
+            for filename1 in annot_image_list:
+                if (filename[:-4]==filename1[:-3]):
                     counting_fails += 1
                     found = 1
                     #print("Filename 1: ", filename1)
@@ -205,29 +165,10 @@ def genrate_final_annotation(ground_truth , xml_file, images):
 
             results = {"Label":labels_final, "Bbox":final}
             json_object = json.dumps(results , cls=NumpyEncoder ,  indent = 2)
-            filename =os.path.join(os.getcwd(),ground_truth[:-15],"infered_results_final" , filename[:-3] + "json")
+            filename =os.path.join(os.getcwd(),ground_truth[:-15],"infered_results_final" , filename[:-4] + "json")
             with open(filename, "w") as outfile:
                 outfile.write(json_object)
     print("Total Frames: ", tot_count)
     print("Failed Inferences: ", counting_fails)
             #for i in range(data1["Bbox"]):
-    return
-
-def bb_intersection_over_union(boxA, boxB):
-	# determine the (x, y)-coordinates of the intersection rectangle
-	xA = max(boxA[0], boxB[0])
-	yA = max(boxA[1], boxB[1])
-	xB = min(boxA[2], boxB[2])
-	yB = min(boxA[3], boxB[3])
-	# compute the area of intersection rectangle
-	interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
-	# compute the area of both the prediction and ground-truth
-	# rectangles
-	boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
-	boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
-	# compute the intersection over union by taking the intersection
-	# area and dividing it by the sum of prediction + ground-truth
-	# areas - the interesection area
-	iou = interArea / float(boxAArea + boxBArea - interArea)
-	# return the intersection over union value
-	return iou
+    return 

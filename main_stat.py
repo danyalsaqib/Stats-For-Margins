@@ -1,4 +1,6 @@
 import json
+
+from numpy import size
 from funcs_stat import *
 import os
 
@@ -8,8 +10,8 @@ channel_list_2 = ['express']
 #*********************************************************#
 #                       Main
 #*********************************************************#
-"""
-size_arr = np.arange(30, 65, 5)
+
+size_arr = np.arange(20, 85, 5)
 #print(size_arr)
 pose_arr = []
 for i in range(6):
@@ -18,6 +20,8 @@ for i in range(6):
     lol3 = [lol, lol, lol2]
     pose_arr.append(lol3)
 #print(pose_arr)
+
+
 """
 size_arr = np.arange(30, 60, 10)
 #print(size_arr)
@@ -28,20 +32,31 @@ for i in range(3):
     lol3 = [lol, lol, lol2]
     pose_arr.append(lol3)
 #print(pose_arr)
-
+"""
 #size_arr = [30]
-#pose_arr = [[50, 50, 30]]
+#pose_arr = [[70, 70, 50]]
 
 express_scores = []
-hum_scores = []
-ptv_scores = []
-samaa_scores = []
+
+small_count = np.zeros(len(size_arr))
+size_acc = np.zeros(len(size_arr))
+total_size = np.zeros(len(size_arr))
+
+invalid_count = np.zeros(len(pose_arr))
+pose_acc = np.zeros(len(pose_arr))
+total_pose = np.zeros(len(pose_arr))
+
+#print("Length of Size Array: ", len(size_arr))
 
 if __name__ == '__main__':
 
     hp_iter_counter = 0
+    total_considered = 0
+
+    legend_str = ""
     for base_size in size_arr:
-        for base_pose in pose_arr:            
+        for base_pose in pose_arr:
+            legend_str = legend_str + str(hp_iter_counter) + ": base_size = [" + str(base_size) + ", " + str(base_size) + "]" + ",   base_pose = " + str(base_pose) + "\n\n"
             defaulted_frames = []
             for channel_name in channel_list_2:
                 preds = os.path.join(channel_name, "infered_results")
@@ -93,21 +108,35 @@ if __name__ == '__main__':
                     for i in range(len(pred_data['Bbox'])):
                         validated = 0
                         pred_box = pred_data['Bbox'][i]
-                        for anot_box in anot_data['Bbox']:
+                        anot_ind = 0
+                        grt_IOU = 0
+                        for j in range(len(anot_data['Bbox'])):
+                            anot_box = anot_data['Bbox'][j]
+                            #print("Pred Box: ", pred_box)
+                            #print("Anot Box: ", anot_box)
                             IOU = bb_intersection_over_union(pred_box, anot_box)
+                            #print("Iou for ", pred_data['Label'][i], " and ", anot_data['Label'][j], " :", IOU)
                             #print("IOU: ", IOU)
                             if IOU > 0.35:
-                                validated = 1
+                                if IOU > grt_IOU:
+                                    validated = 1
+                                    anot_ind = j
+                                    grt_IOU = IOU
                                 #print("Truly Positive")
                         if validated == 1:
                             det_TP += 1
                             det_local_tp += 1
                             
                             pred_label = pred_data['Label'][i]
+                            anot_comparator = anot_data['Label'][anot_ind]
+
+                            #print("Matched Pred: ", pred_label)
+                            #print("Matched Anot: ", anot_comparator)
+                            
                             #print("Recognition Validated for Label: ", pred_label)
                             rec_val = 0
 
-                            given_size = pred_data['Size'][i]
+                            given_size = pred_data['size'][i]
                             given_pose = pred_data['Pose'][i]
 
                             size_val = calcSize(base_size, given_size)
@@ -115,71 +144,20 @@ if __name__ == '__main__':
 
                             if size_val == 0:
                                 small_faces += 1
-                            elif pose_val == 0:
+                            if pose_val == 0:
                                 invalid_poses += 1
-
-
-                            if pred_label != 'small face' and pred_label != 'Invalid Pose' and size_val == 1 and pose_val == 1:
-                                #print("Successful File: ", filename)
-                                #print("Successful Label: ", pred_label)
-                                for anot_label in anot_data['Label']:
-                                    if pred_label == anot_label:
-                                        #print("Pred Label: ", pred_label)
-                                        #print("Anot Label: ", anot_label)
-                                        if pred_label == 'Unknown':
-                                            if unk_counter < unk_anot:
-                                                #print("Validated")
-                                                unk_counter += 1
-                                                rec_val = 1
-                                                break
-                                            else:
-                                                #print("Unknowns exceeded")
-                                                #print("FP - frame: ", pred_label)
-                                                #rec_FP += 1
-                                                #local_rec_FP += 1
-                                                rec_val = 0
-                                                local_rec_FN += 1
-                                            #    rec_FP += 1
-                                                break
-
-                                        else:
-                                            #print("Validated")
-                                            rec_val = 1
-                                            break
                             
-                                if rec_val == 1:
+                            if pred_label != 'small face' and pred_label != 'Invalid Pose' and size_val == 1 and pose_val == 1:
+                                if pred_label == anot_comparator:
                                     rec_local_tp += 1
                                     rec_TP += 1
-                                #else:
-                                    #print("Increasing FP")
-                                    #rec_FP += 1
-                                    #local_rec_FP += 1
-                            else:
-                                rejecc += 1
-                    
-                    print("Unk_Count: ", unk_counter)
-                    len_percieved_anot = 0
+                                elif pred_label == 'Unknown':
+                                    local_rec_FN += 1
+                                else:
+                                    local_rec_FP += 1
+
                     rec_FN = rec_FN + local_rec_FN
-                    #print("Rejecc: ", rejecc)
-
-                    for anot_counter_label in anot_data['Label']:
-                        if anot_counter_label != 'small face' and anot_counter_label != 'Invalid Pose':
-                            len_percieved_anot += 1
-
-                    len_percieved_anot = len_percieved_anot - rejecc
-                    print("Length Perceived: ", len_percieved_anot)
-                    local_rec_FP = len_percieved_anot - rec_local_tp - local_rec_FN
                     rec_FP = rec_FP + local_rec_FP
-                    #rec_FN = rec_FN + len_percieved_anot - rec_local_tp - local_rec_FP # last substraction added
-                    #local_rec_FN = len_percieved_anot - rec_local_tp
-                    #if local_rec_FP > 0:
-                    #    rec_FP = rec_FP - local_rec_FN
-
-                                    
-                    #print("Pred Boxes Length", len(pred_data['Bbox']))
-                    #print("Pred Boxes: ", pred_data['Label'])
-                    #print("Anot Boxes Length", len(anot_data['Bbox']))
-                    #print("Anot Boxes: ", anot_data['Label'])
                     
                     local_det_FP = len(pred_data['Bbox']) - det_local_tp
                     local_det_FN = len(anot_data['Bbox']) - det_local_tp
@@ -192,7 +170,7 @@ if __name__ == '__main__':
                     det_FP = det_FP + len(pred_data['Bbox']) - det_local_tp
                     det_FN = det_FN + len(anot_data['Bbox']) - det_local_tp
 
-                """
+                
                 print("\nDetection")
                 print("True Positives: ", det_TP)
                 print("False Positives: ", det_FP)
@@ -205,7 +183,7 @@ if __name__ == '__main__':
                 print("Precision: ", det_precision)
                 print("Recall: ", det_recall)
                 print("F1 Score: ", det_f1s)
-                """
+                
 
                 print("\nRecognition")
                 print("True Positives: ", rec_TP)
@@ -225,31 +203,60 @@ if __name__ == '__main__':
                 print("Precision: ", rec_precision)
                 print("Recall: ", rec_recall)
                 print("F1 Score: ", rec_f1s)
+                
+                rec_acc = rec_TP / (rec_TP + rec_FP + rec_FN)
 
-                append_wala = [rec_precision, rec_recall]
+                total_considered = total_considered + (rec_TP + rec_FP + rec_FN)
+
+                small_face_perc = small_faces / (rec_TP + rec_FP + rec_FN + small_faces)
+                small_face_perc = small_face_perc * 100
+
+                invalid_pose_perc = invalid_poses / (rec_TP + rec_FP + rec_FN + invalid_poses)
+                invalid_pose_perc = invalid_pose_perc * 100
+
+                pitch = base_pose[0]
+                index = (pitch - 45) / 5
+                index = len(pose_arr) - index - 1
+                index = int(index)
+
+                #print("Pose Index: ", index)
+
+                invalid_count[index] = invalid_count[index] + invalid_poses
+                pose_acc[index] = pose_acc[index] + rec_TP
+                total_pose[index] = total_pose[index] + rec_TP + rec_FP + rec_FN + invalid_poses
+
+                pitch = base_size
+                index = (pitch - 20) / 5
+                index = index 
+                index = int(index)
+
+                #print("Size Index: ", index)
+                #print("Len Small Count: ", len(small_count))
+
+                small_count[index] = small_count[index] + small_faces
+                size_acc[index] = size_acc[index] + rec_TP
+                total_size[index] = total_size[index] + rec_TP + rec_FP + rec_FN + small_faces
+
+
+
+                append_wala = [rec_acc, base_size, base_pose, small_face_perc, invalid_pose_perc]
 
                 if channel_name == 'express':
                     express_scores.append(append_wala)
-                elif channel_name == 'hum':
-                    hum_scores.append(append_wala)
-                elif channel_name == 'ptv':
-                    ptv_scores.append(append_wala)
-                elif channel_name == 'samaa':
-                    samaa_scores.append(append_wala)
 
                 print("Small Faces: ", small_faces)
                 print("Invalid Poses: ", invalid_poses)
 
                 
-                #det_dict = {"True Positives" : det_TP, "False Positives" : det_FP, "False Negatives" : det_FN, "Precision" : det_precision, "Recall" : det_recall, "F1 Score" : det_f1s}
+                det_dict = {"True Positives" : det_TP, "False Positives" : det_FP, "False Negatives" : det_FN, "Precision" : det_precision, "Recall" : det_recall, "F1 Score" : det_f1s}
                 rec_dict = {"True Positives" : rec_TP, "False Positives" : rec_FP, "False Negatives" : rec_FN, "Precision" : rec_precision, "Recall" : rec_recall, "F1 Score" : rec_f1s}
                 
-                dict = {"Channel" : channel_name, "Size" : int(base_size), "Pose" : base_pose, "Small Faces" : small_faces, "Invalid Poses" : invalid_poses, "Recognition Metrics" : rec_dict}
+                dict = {"Channel" : channel_name, "Key" : hp_iter_counter, "Size" : int(base_size), "Pose" : base_pose, "Small Faces" : small_faces, "Invalid Poses" : invalid_poses, "Recognition Metrics" : rec_dict, "Detection Metrics" : det_dict}
                 #print(dict)
 
                 saver_string = channel_name + ".txt"
                 if os.path.exists(saver_string):
-                    print("Updating File")
+                    #print("Updating File")
                     g = open(saver_string)
                     welp = g.read()
                     #print("Previous File: ", welp)
@@ -258,9 +265,11 @@ if __name__ == '__main__':
                     with open(saver_string, 'w') as f:
                         f.write(welp)
                 else:
-                    print("Creating File")
+                    #print("Creating File")
                     with open(saver_string, 'w') as f:
                         f.write(str(dict))
+            
+            hp_iter_counter += 1
 
             #print("Defaulted Frames: ", defaulted_frames)
             #print("Number of Defaulted Frames: ", len(defaulted_frames))
@@ -268,7 +277,26 @@ if __name__ == '__main__':
                 f.write(str(defaulted_frames))
 
     #express_scores = [[12, 34], [45, 67], [98, 75]]
-    print("Express Scores: ", express_scores)
-    plot_stat(express_scores, 'express')
+    #print("Express Scores: ", express_scores)
+    with open("legend.txt", 'w') as f:
+        f.write(legend_str)
+    #print("Legend String: \n", legend_str)
+    print("Total Considered: ", total_considered)
+    print("Size Array: ", size_arr)
+    print("Small Count: ", small_count)
+    print("Size Accuracy: ", size_acc / total_size)#, "\n\n")
+    print("Total Size: ", total_size, "\n\n")
 
 
+    print("Pose Array: ", pose_arr)
+    pose_arr_mod = [i[0] for i in pose_arr]
+    print("Modified Pose Array: ", pose_arr_mod)
+    print("Invalid Count: ", invalid_count / total_pose)
+    print("Pose Accuracy: ", pose_acc / total_pose)
+    #print("Total Pose: ", total_pose)
+
+    plot_stat(size_arr, ((small_count / total_size) * 100), channel_list_2[0], size=1, acc=0)
+    plot_stat(size_arr, ((size_acc / (total_size - small_count)) * 100), channel_list_2[0], size=1, acc=1)
+    plot_stat(pose_arr_mod, ((invalid_count / total_pose) * 100), channel_list_2[0], size=0, acc=0)
+    plot_stat(pose_arr_mod, ((pose_acc / (total_pose - invalid_count)) * 100), channel_list_2[0], size=0, acc=1)
+   
